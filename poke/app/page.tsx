@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 
 export default function Home() {
   const [screen, setScreen] = useState("title");
@@ -17,7 +18,13 @@ export default function Home() {
         <h1 className="mb-10 text-5xl font-bold">Level Select</h1>
 
         <div className="flex flex-col gap-4 text-2xl">
-          <button className="hover:text-yellow-400">Level 1</button>
+          <Link
+            href="/level1"
+            onClick={playClickSound}
+            className="text-center hover:text-yellow-400"
+          >
+            Level 1
+          </Link>
           <button className="hover:text-yellow-400">Level 2</button>
           <button className="hover:text-yellow-400">Level 3</button>
         </div>
@@ -76,7 +83,7 @@ export default function Home() {
       ) : (
         <div className="max-w-2xl text-left text-xl leading-10">
           <p>・Both players show their hands, and each starts with one finger.</p>
-          <p>・On your turn, touch one of your opponent's hands with one of your hands.</p>
+          <p>・On your turn, touch one of your opponent&apos;s hands with one of your hands.</p>
           <p>・The touched hand will increase by the number of fingers on the hand you used to touch it.</p>
           <p>・A hand with five or more fingers is out.</p>
           <p>・The player whose both hands are out loses.</p>
