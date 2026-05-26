@@ -19,7 +19,7 @@ export default function Home() {
 
         <div className="flex flex-col gap-4 text-2xl">
           <Link
-            href="/level1"
+            href="/game/level1"
             onClick={playClickSound}
             className="text-center hover:text-yellow-400"
           >

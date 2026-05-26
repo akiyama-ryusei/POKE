@@ -129,7 +129,7 @@ function Hand({ owner, side, count, selected, disabled, onClick }) {
 
 // メインゲームの画面を表示する関数
 // exportが付いているのでこの関数が最終的に
-export default function MainGame() {
+export default function MainGame({ level = 1 }) {
   const [hands, setHands] = useState(createInitialHands);
   const [selectedHand, setSelectedHand] = useState(null);
   const [turn, setTurn] = useState("player");
@@ -212,6 +212,7 @@ export default function MainGame() {
         <header className="flex items-center justify-between border-4 border-double border-white/50 bg-black/80 px-4 py-3">
           <div>
             <h1 className="text-4xl font-black tracking-[0.16em]">POKE</h1>
+            <p className="mt-1 text-sm font-bold text-yellow-300">LEVEL {level}</p>
           </div>
 
           <button
