@@ -13,6 +13,22 @@ function createHand(count = 1) {
   };
 }
 
+
+// const levelSettings = {
+//   1: {
+//     label: "LEVEL 1",
+//     useItems: false,
+//   },
+//   2: {
+//     label: "LEVEL 2",
+//     useItems: false,
+//   },
+//   3: {
+//     label: "LEVEL 3",
+//     useItems: true,
+//   },
+// };
+
 // それぞれの手を初期化する関数
 function createInitialHands() {
   return {
