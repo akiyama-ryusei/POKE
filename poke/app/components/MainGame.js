@@ -46,6 +46,23 @@ const handLabel = {
 const handOrder = ["left", "right"];
 const enemyDisplayOrder = ["right", "left"];
 
+// アイテム定義
+const ITEMS = [
+  { id: "guard", name: "Guard", desc: "相手の攻撃をはねのける（次の敵の攻撃を無効化）" },
+  { id: "sacrifive", name: "Sacrifive", desc: "片手を犠牲にしてもう片方の指を1-4に設定する" },
+  { id: "roulette", name: "Finger Roulette", desc: "自分の選んだ手の指を1-4のランダムに変更する（そのターンのみ）" },
+];
+
+// ITEMS から重複なくランダムに n 個選ぶ
+function pickRandomItems(n) {
+  const pool = [...ITEMS];
+  const picked = [];
+  while (picked.length < n && pool.length > 0) {
+    const i = Math.floor(Math.random() * pool.length);
+    picked.push(pool.splice(i, 1)[0]);
+  }
+  return picked;
+}
 // 手の画像ファイルのパスを取得する関数
 function handImagePath(owner, side, count) {
   const imageCount = Math.min(count, 5);
@@ -152,8 +169,17 @@ export default function MainGame({ level = 1 }) {
   const [message, setMessage] = useState("自分の手を選んでください");
   const [winner, setWinner] = useState(null);
 
+  // アイテム関連の状態
+  const [playerItems, setPlayerItems] = useState(() => (level === 2 ? pickRandomItems(3) : []));
+  const [itemMenuOpen, setItemMenuOpen] = useState(false);
+  const [selectedItemId, setSelectedItemId] = useState(null);
+  const [itemStage, setItemStage] = useState(null); // null | 'preview' | 'use_wait_hand' | 'sacrifive_choose_count'
+  const [sacrifiveChoice, setSacrifiveChoice] = useState(null);
+  const [guardActive, setGuardActive] = useState(false);
+
   const playerLose = isHandOut(hands.player.left) && isHandOut(hands.player.right);
   const enemyLose = isHandOut(hands.enemy.left) && isHandOut(hands.enemy.right);
+  const sacrifiveUnavailable = isHandOut(hands.player.left) || isHandOut(hands.player.right);
 
   function resetGame() {
     setHands(createInitialHands());
@@ -161,6 +187,13 @@ export default function MainGame({ level = 1 }) {
     setTurn("player");
     setMessage("自分の手を選んでください");
     setWinner(null);
+    // level2 ではゲーム開始時にランダムでアイテムを配布
+    setPlayerItems(level === 2 ? pickRandomItems(3) : []);
+    setItemMenuOpen(false);
+    setSelectedItemId(null);
+    setItemStage(null);
+    setSacrifiveChoice(null);
+    setGuardActive(false);
   }
 
   function attackEnemy(targetHand) {
@@ -299,6 +332,14 @@ function chooseEnemyMove(currentHands) {
 }
   // CPUの攻撃を実行する関数
   function enemyAttack(currentHands) {
+    // Guard が有効ならこの攻撃を無効化してプレイヤーの手番に戻す
+    if (guardActive) {
+      setGuardActive(false);
+      setTurn("player");
+      setMessage("相手の攻撃をガードしました。自分の手を選んでください");
+      return;
+    }
+
     const enemyOptions = handOrder.filter((side) => !isHandOut(currentHands.enemy[side]));
     const playerOptions = handOrder.filter((side) => !isHandOut(currentHands.player[side]));
 
@@ -330,6 +371,109 @@ function chooseEnemyMove(currentHands) {
 
     setTurn("player");
     setMessage("自分の手を選んでください");
+  }
+
+  // アイテム消費ヘルパー
+  function consumeItem(itemId) {
+    setPlayerItems((prev) => prev.filter((it) => it.id !== itemId));
+  }
+
+  // アイテム使用の起点（メニューでアイテムを押したとき）
+  function handleItemClick(itemId) {
+    // Sacrifive が使用できない状態なら説明でそれを表示する
+    if (itemId === 'sacrifive' && sacrifiveUnavailable) {
+      setSelectedItemId(itemId);
+      setItemStage('preview');
+      setMessage('一方の手が既にOUTになっている為このアイテムは使用できません');
+      return;
+    }
+
+    // アイテム説明表示フェーズ
+    if (selectedItemId !== itemId) {
+      setSelectedItemId(itemId);
+      setItemStage('preview');
+      // メッセージは補助的に表示（既存テキストは変更しない）
+      const it = ITEMS.find((i) => i.id === itemId);
+      setMessage(it ? it.desc : '');
+      return;
+    }
+
+    // 同じアイテム名をもう一度押すと使用開始
+    if (itemId === 'guard') {
+      // Guard は即時発動
+      setGuardActive(true);
+      consumeItem('guard');
+      setItemMenuOpen(false);
+      setSelectedItemId(null);
+      setItemStage(null);
+      setMessage('Guard を使用しました。相手の次の攻撃を無効化します');
+      return;
+    }
+
+    if (itemId === 'sacrifive') {
+      // Sacrifive はまず指の数を選ばせる
+      setItemStage('sacrifive_choose_count');
+      setMessage('Sacrifive: 1〜4 の数を選んでください');
+      return;
+    }
+
+    if (itemId === 'roulette') {
+      // Roulette は手を選ばせる
+      setItemStage('use_wait_hand');
+      setMessage('Finger Roulette: 本数を変更する手を選んでください');
+      // メニューは開いたままにしておく
+      return;
+    }
+  }
+
+  // Sacrifive: 数を選択したときの処理
+  function handleSacrifiveChooseCount(n) {
+    setSacrifiveChoice(n);
+    setItemStage('use_wait_hand');
+    setMessage(`Sacrifive: ${n} にする手とは別の手を犠牲にする手を選んでください`);
+  }
+
+  // アイテムの効果を適用する（プレイヤーの手を対象にするアイテム）
+  function applyItemToPlayerHand(itemId, handSide) {
+    if (!itemId) return;
+
+    if (itemId === 'sacrifive') {
+      // Sacrifive: handSide を犠牲（5にする）、もう片方を sacrifiveChoice にする
+      const other = handSide === 'left' ? 'right' : 'left';
+      setHands((prev) => ({
+        ...prev,
+        player: {
+          ...prev.player,
+          [handSide]: { ...prev.player[handSide], count: 5 }, // 犠牲にする
+          [other]: { ...prev.player[other], count: sacrifiveChoice },
+        },
+      }));
+      consumeItem('sacrifive');
+      setItemMenuOpen(false);
+      setSelectedItemId(null);
+      setItemStage(null);
+      setSacrifiveChoice(null);
+      setMessage('Sacrifive を使用しました。自分の手番です');
+      return;
+    }
+
+    if (itemId === 'roulette') {
+      // Finger Roulette: 対象手の指を1-4でランダムに設定
+      const rand = Math.floor(Math.random() * 4) + 1;
+      setHands((prev) => ({
+        ...prev,
+        player: {
+          ...prev.player,
+          [handSide]: { ...prev.player[handSide], count: rand },
+        },
+      }));
+      consumeItem('roulette');
+      setItemMenuOpen(false);
+      setSelectedItemId(null);
+      setItemStage(null);
+      setMessage(`Finger Roulette を使用しました（${rand} 本になりました）。自分の手番です`);
+      return;
+    }
   }
 
   return (
@@ -365,14 +509,92 @@ function chooseEnemyMove(currentHands) {
                     owner="enemy"
                     side={side}
                     count={hands.enemy[side].count}
-                    disabled={turn !== "player" || !selectedHand || winner}
+                    // アイテム使用でプレイヤーの手を選ぶフェーズ時は敵手を押せない
+                    disabled={turn !== "player" || !selectedHand || winner || itemStage === 'use_wait_hand'}
                     onClick={() => attackEnemy(side)}
                   />
                 ))}
               </div>
             </section>
 
-            <div className="h-10 border-y border-dashed border-white/20" />
+            <div className="flex items-center justify-center gap-4">
+              {level === 2 ? (
+                <div className="flex flex-col items-center">
+                  <button
+                    type="button"
+                    onClick={() => setItemMenuOpen((s) => !s)}
+                    className="border-2 border-white/60 px-4 py-2 font-black tracking-[0.12em] hover:bg-white hover:text-black"
+                  >
+                    ITEM
+                  </button>
+
+                  {/* アイテムメニュー */}
+                  {itemMenuOpen ? (
+                    <div className="mt-3 w-72 space-y-2 rounded border border-white/20 bg-black/70 p-3 text-left">
+                      {/* 所持アイテム一覧 */}
+                      {playerItems.length === 0 ? (
+                        <p className="text-sm text-white/60">アイテムがありません</p>
+                      ) : (
+                        playerItems.map((it) => (
+                          <div key={it.id} className="flex flex-col">
+                            <button
+                              type="button"
+                              onClick={() => handleItemClick(it.id)}
+                              className="text-left font-bold hover:text-yellow-300"
+                            >
+                              {it.name}
+                            </button>
+
+                            {/* 説明表示 (選択時) */}
+                            {selectedItemId === it.id && itemStage === 'preview' ? (
+                              <div className="mt-1">
+                                <p className="text-sm text-white/70">
+                                  {it.id === 'sacrifive' && sacrifiveUnavailable
+                                    ? '一方の手が既にOUTになっている為このアイテムは使用できません'
+                                    : it.desc}
+                                </p>
+                                <div className="mt-2">
+                                  <span className="text-xs text-white/60">アイテム名をもう一度押すと使用</span>
+                                </div>
+                              </div>
+                            ) : null}
+
+                            {/* Sacrifive の数選択 */}
+                            {selectedItemId === it.id && itemStage === 'sacrifive_choose_count' ? (
+                              <div className="mt-1 flex gap-2">
+                                {[1,2,3,4].map((n) => (
+                                  <button
+                                    key={n}
+                                    type="button"
+                                    onClick={() => handleSacrifiveChooseCount(n)}
+                                    className="border px-2 py-1 text-sm hover:bg-white hover:text-black"
+                                  >
+                                    {`${n}`}
+                                  </button>
+                                ))}
+                              </div>
+                            ) : null}
+
+                            {/* 使用待ちの案内 */}
+                            {selectedItemId === it.id && itemStage === 'use_wait_hand' ? (
+                              <p className="mt-1 text-xs text-white/60">
+                                {it.id === 'roulette'
+                                // FingerRouletteの使用の場合
+                                  ? 'ランダムに指を変更する手を選んでください'
+                                // Sacrifiveの使用の場合
+                                  : 'OUTにする自分の手を選んでください'}
+                              </p>
+                            ) : null}
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  ) : null}
+                </div>
+              ) : (
+                <div className="h-10 border-y border-dashed border-white/20" />
+              )}
+            </div>
 
             <section>
               <div className="mb-3 flex items-center justify-between">
@@ -390,6 +612,23 @@ function chooseEnemyMove(currentHands) {
                     selected={selectedHand === side}
                     disabled={turn !== "player" || winner}
                     onClick={() => {
+                      // アイテムメニューが開いている場合
+                      if (itemMenuOpen) {
+                        // アイテムの手を対象にするフェーズならアイテムを適用
+                        if (itemStage === 'use_wait_hand' && selectedItemId) {
+                          applyItemToPlayerHand(selectedItemId, side);
+                          return;
+                        }
+                        // アイテム使用をやめて通常の操作に戻る
+                        setItemMenuOpen(false);
+                        setSelectedItemId(null);
+                        setItemStage(null);
+                        setMessage(`▶ 自分の${handLabel[side]}で、相手のどちらをつつく？`);
+                        setSelectedHand(side);
+                        return;
+                      }
+
+                      // 通常の手選択
                       setSelectedHand(side);
                       setMessage(`▶ 自分の${handLabel[side]}で、相手のどちらをつつく？`);
                     }}
