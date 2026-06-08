@@ -118,116 +118,6 @@ function attackedHand(hand, power) {
   };
 }
 
-// CPUの行動を決めるための補助関数
-function getPossibleMoves(currentHands, attacker) {
-  const defender = attacker === "enemy" ? "player" : "enemy";
-
-  const attackerOptions = handOrder.filter(
-    (side) => !isHandOut(currentHands[attacker][side])
-  );
-
-  const defenderOptions = handOrder.filter(
-    (side) => !isHandOut(currentHands[defender][side])
-  );
-
-  const moves = [];
-
-  attackerOptions.forEach((attackerHand) => {
-    defenderOptions.forEach((defenderHand) => {
-      moves.push({ attackerHand, defenderHand });
-    });
-  });
-
-  return moves;
-}
-
-function simulateAttack(currentHands, attacker, move) {
-  const defender = attacker === "enemy" ? "player" : "enemy";
-  const power = attackPower(currentHands[attacker][move.attackerHand]);
-
-  return {
-    ...currentHands,
-    [defender]: {
-      ...currentHands[defender],
-      [move.defenderHand]: attackedHand(
-        currentHands[defender][move.defenderHand],
-        power
-      ),
-    },
-  };
-}
-
-function isPlayerLose(currentHands) {
-  return (
-    isHandOut(currentHands.player.left) &&
-    isHandOut(currentHands.player.right)
-  );
-}
-
-function isEnemyLose(currentHands) {
-  return (
-    isHandOut(currentHands.enemy.left) &&
-    isHandOut(currentHands.enemy.right)
-  );
-}
-
-function randomChoice(array) {
-  return array[Math.floor(Math.random() * array.length)];
-}
-
-function randomRouletteCount() {
-  return Math.floor(Math.random() * 4) + 1;
-}
-
-function chooseEnemyMove(currentHands) {
-  const enemyMoves = getPossibleMoves(currentHands, "enemy");
-
-  if (enemyMoves.length === 0) return null;
-
-  // 1. 今勝てるなら勝つ
-  const winningMoves = enemyMoves.filter((move) => {
-    const afterEnemyAttack = simulateAttack(currentHands, "enemy", move);
-    return isPlayerLose(afterEnemyAttack);
-  });
-
-  if (winningMoves.length > 0) {
-    return randomChoice(winningMoves);
-  }
-
-  // 2. 次に負ける手は避ける
-  const safeMoves = enemyMoves.filter((move) => {
-    const afterEnemyAttack = simulateAttack(currentHands, "enemy", move);
-    const playerMoves = getPossibleMoves(afterEnemyAttack, "player");
-
-    const playerCanWin = playerMoves.some((playerMove) => {
-      const afterPlayerAttack = simulateAttack(
-        afterEnemyAttack,
-        "player",
-        playerMove
-      );
-
-      return isEnemyLose(afterPlayerAttack);
-    });
-
-    return !playerCanWin;
-  });
-
-  // 3. 安全手があるなら高確率で選ぶ
-  if (safeMoves.length > 0) {
-    if (Math.random() < 0.8) {
-      return randomChoice(safeMoves);
-    }
-  }
-
-  // 4. 安全手があるなら安全手からランダム
-  if (safeMoves.length > 0) {
-    return randomChoice(safeMoves);
-  }
-  
-  // 5. どうしようもなければランダム
-  return randomChoice(enemyMoves);
-}
-
 // 手を表示する
 function Hand({ owner, side, count, selected, disabled, onClick }) {
   return (
@@ -334,6 +224,111 @@ export default function MainGame({ level = 1 }) {
 
     setTimeout(() => enemyAttack(nextHands), 700);
   }
+  // CPUの行動を決めるための補助関数
+  function getPossibleMoves(currentHands, attacker) {
+  const defender = attacker === "enemy" ? "player" : "enemy";
+
+  const attackerOptions = handOrder.filter(
+    (side) => !isHandOut(currentHands[attacker][side])
+  );
+
+  const defenderOptions = handOrder.filter(
+    (side) => !isHandOut(currentHands[defender][side])
+  );
+
+  const moves = [];
+
+  attackerOptions.forEach((attackerHand) => {
+    defenderOptions.forEach((defenderHand) => {
+      moves.push({ attackerHand, defenderHand });
+    });
+  });
+
+  return moves;
+}
+
+function simulateAttack(currentHands, attacker, move) {
+  const defender = attacker === "enemy" ? "player" : "enemy";
+  const power = attackPower(currentHands[attacker][move.attackerHand]);
+
+  return {
+    ...currentHands,
+    [defender]: {
+      ...currentHands[defender],
+      [move.defenderHand]: attackedHand(
+        currentHands[defender][move.defenderHand],
+        power
+      ),
+    },
+  };
+}
+
+function isPlayerLose(currentHands) {
+  return (
+    isHandOut(currentHands.player.left) &&
+    isHandOut(currentHands.player.right)
+  );
+}
+
+function isEnemyLose(currentHands) {
+  return (
+    isHandOut(currentHands.enemy.left) &&
+    isHandOut(currentHands.enemy.right)
+  );
+}
+
+function randomChoice(array) {
+  return array[Math.floor(Math.random() * array.length)];
+}
+
+function chooseEnemyMove(currentHands) {
+  const enemyMoves = getPossibleMoves(currentHands, "enemy");
+
+  if (enemyMoves.length === 0) return null;
+
+  // 1. 今勝てるなら勝つ
+  const winningMoves = enemyMoves.filter((move) => {
+    const afterEnemyAttack = simulateAttack(currentHands, "enemy", move);
+    return isPlayerLose(afterEnemyAttack);
+  });
+
+  if (winningMoves.length > 0) {
+    return randomChoice(winningMoves);
+  }
+
+  // 2. 次に負ける手は避ける
+  const safeMoves = enemyMoves.filter((move) => {
+    const afterEnemyAttack = simulateAttack(currentHands, "enemy", move);
+    const playerMoves = getPossibleMoves(afterEnemyAttack, "player");
+
+    const playerCanWin = playerMoves.some((playerMove) => {
+      const afterPlayerAttack = simulateAttack(
+        afterEnemyAttack,
+        "player",
+        playerMove
+      );
+
+      return isEnemyLose(afterPlayerAttack);
+    });
+
+    return !playerCanWin;
+  });
+
+  // 3. 安全手があるなら高確率で選ぶ
+  if (safeMoves.length > 0) {
+    if (Math.random() < 0.8) {
+      return randomChoice(safeMoves);
+    }
+  }
+
+  // 4. 安全手があるなら安全手からランダム
+  if (safeMoves.length > 0) {
+    return randomChoice(safeMoves);
+  }
+  
+  // 5. どうしようもなければランダム
+  return randomChoice(enemyMoves);
+}
 
   // CPUの攻撃を実行する関数
   function enemyAttack(currentHands) {
