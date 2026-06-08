@@ -287,6 +287,8 @@ export default function MainGame({ level = 1 }) {
   const [itemStage, setItemStage] = useState(null); // null | 'preview' | 'use_wait_hand' | 'sacrifive_choose_count'
   const [sacrifiveChoice, setSacrifiveChoice] = useState(null);
   const [guardActive, setGuardActive] = useState(false);
+  const [enemyGuardActive, setEnemyGuardActive] = useState(false);
+  const [enemyGuardUses, setEnemyGuardUses] = useState(level >= 2 ? 1 : 0);
 
   const playerLose = isHandOut(hands.player.left) && isHandOut(hands.player.right);
   const enemyLose = isHandOut(hands.enemy.left) && isHandOut(hands.enemy.right);
@@ -305,11 +307,22 @@ export default function MainGame({ level = 1 }) {
     setItemStage(null);
     setSacrifiveChoice(null);
     setGuardActive(false);
+    setEnemyGuardActive(false);
+    setEnemyGuardUses(level >= 2 ? 1 : 0);
   }
 
   function attackEnemy(targetHand) {
     if (turn !== "player" || !selectedHand || winner) return;
+    if (enemyGuardActive) {
+      setEnemyGuardActive(false);
 
+      setMessage("相手がGuardで攻撃を防いだ！");
+      setTurn("enemy");
+
+      setTimeout(() => enemyAttack(hands), 700);
+
+      return;
+    }
     const power = attackPower(hands.player[selectedHand]);
     const nextEnemyHands = {
       ...hands.enemy,
@@ -426,6 +439,37 @@ function chooseEnemyMove(currentHands) {
     return !playerCanWin;
   });
 
+  // Level 2以上では、2手先で勝てる手を高確率で狙う
+  if (level >= 2) {
+    const twoStepWinningMoves = safeMoves.filter((move) => {
+      const afterEnemyAttack = simulateAttack(currentHands, "enemy", move);
+      const playerMoves = getPossibleMoves(afterEnemyAttack, "player");
+
+      return playerMoves.every((playerMove) => {
+        const afterPlayerAttack = simulateAttack(
+          afterEnemyAttack,
+          "player",
+          playerMove
+        );
+
+        const nextEnemyMoves = getPossibleMoves(afterPlayerAttack, "enemy");
+
+        return nextEnemyMoves.some((nextEnemyMove) => {
+          const afterNextEnemyAttack = simulateAttack(
+            afterPlayerAttack,
+            "enemy",
+            nextEnemyMove
+          );
+
+          return isPlayerLose(afterNextEnemyAttack);
+        });
+      });
+    });
+
+    if (twoStepWinningMoves.length > 0 && Math.random() < 0.7) {
+      return randomChoice(twoStepWinningMoves);
+    }
+  }
   // 3. 安全手があるなら高確率で選ぶ
   if (safeMoves.length > 0) {
     if (Math.random() < 0.8) {
@@ -441,6 +485,40 @@ function chooseEnemyMove(currentHands) {
   // 5. どうしようもなければランダム
   return randomChoice(enemyMoves);
 }
+  // CPUがGuardを使うべきか判断して、使うならどの手でGuardするかを決める関数
+function chooseEnemyGuardHand(currentHands) {
+  if (level < 2 || enemyGuardUses <= 0 ) return false;
+
+  const playerMoves = getPossibleMoves(currentHands, "player");
+
+  // 1. 次のプレイヤー攻撃でCPUが両手OUTになるなら、必ずGuard
+  const loseDangerMoves = playerMoves.filter((move) => {
+    const afterPlayerAttack = simulateAttack(currentHands, "player", move);
+    return isEnemyLose(afterPlayerAttack);
+  });
+
+  if (loseDangerMoves.length > 0) {
+    return true;
+  }
+
+  // 2. 次のプレイヤー攻撃でCPUの片手がOUTになるなら、80%でGuard
+  const oneHandDangerMoves = playerMoves.filter((move) => {
+    const targetHand = move.defenderHand;
+    const afterPlayerAttack = simulateAttack(currentHands, "player", move);
+
+    return (
+      !isHandOut(currentHands.enemy[targetHand]) &&
+      isHandOut(afterPlayerAttack.enemy[targetHand])
+    );
+  });
+
+  if (oneHandDangerMoves.length > 0 ) {
+    return true;
+  }
+
+  return false;
+}
+
   // CPUの攻撃を実行する関数
   function enemyAttack(currentHands) {
     // Guard が有効ならこの攻撃を無効化してプレイヤーの手番に戻す
@@ -455,6 +533,18 @@ function chooseEnemyMove(currentHands) {
     const playerOptions = handOrder.filter((side) => !isHandOut(currentHands.player[side]));
 
     if (enemyOptions.length === 0 || playerOptions.length === 0) return;
+    const useGuard = chooseEnemyGuardHand(currentHands);
+
+    if (useGuard) {
+      setEnemyGuardActive(true);
+      setEnemyGuardUses((prev) => Math.max(prev - 1, 0));
+    }
+          setTurn("player");
+          setMessage(
+            useGuard
+              ? `相手がGuardを使い、攻撃しました`
+              : "自分の手を選んでください"
+    );
 
     const selectedMove = chooseEnemyMove(currentHands);
 
@@ -610,7 +700,18 @@ function chooseEnemyMove(currentHands) {
             <section>
               <div className="mb-3 flex items-center justify-between">
                 <h2 className="text-2xl font-black tracking-[0.12em] text-rose-200">ENEMY</h2>
-                <span className="text-sm font-bold text-rose-200">{enemyLose ? "両手アウト" : "TARGET"}</span>
+
+                <div className="flex items-center gap-3">
+                    {level >= 2 && (
+                    <span className="rounded border border-rose-300 px-2 py-1 text-lg font-black text-rose-300">
+                      🛡️ × {enemyGuardUses}
+                    </span>
+                    )}
+
+                    <span className="text-sm font-bold text-rose-200">
+                      {enemyLose ? "両手アウト" : "TARGET"}
+                    </span>
+                </div>
               </div>
 
               <div className="grid grid-cols-2 gap-4">
