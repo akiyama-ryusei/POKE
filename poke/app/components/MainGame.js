@@ -242,8 +242,8 @@ function Hand({ owner, side, count, selected, disabled, onClick }) {
           ? "border-cyan-300 bg-slate-950/85 hover:bg-cyan-950/80"
           : "border-rose-300 bg-slate-950/85 hover:bg-rose-950/80",
         selected ? "translate-y-[-4px] ring-4 ring-yellow-300" : "",
-        isOut(count) ? "cursor-not-allowed opacity-40" : "",
-        disabled && !isOut(count) ? "cursor-not-allowed" : "",
+        isOut(count) ? "cursor-not-allowed opacity-30 grayscale" : "",
+        disabled && !isOut(count) ? "cursor-not-allowed opacity-70 saturate-75 brightness-90" : "",
       ].join(" ")}
     >
       {selected ? (
