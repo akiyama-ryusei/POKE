@@ -32,7 +32,13 @@ export default function Home() {
           >
             Level 2
           </Link>
-          <button className="hover:text-yellow-400">Level 3</button>
+          <Link
+            href="/game/level3"
+            onClick={playClickSound}
+            className="text-center hover:text-yellow-400"
+          >
+            Level 3
+          </Link>
         </div>
 
         <button

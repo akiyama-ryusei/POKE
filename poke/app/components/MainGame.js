@@ -52,6 +52,7 @@ const ITEMS = [
   { id: "guard", name: "Guard", desc: "相手の攻撃をはねのける（次の敵の攻撃を無効化）" },
   { id: "sacrifive", name: "Sacrifive", desc: "片手を犠牲にしてもう片方の指を1-4に設定する" },
   { id: "roulette", name: "Finger Roulette", desc: "自分の選んだ手の指を1-4のランダムに変更する（そのターンのみ）" },
+  { id: "doubleAttack", name: "Double Attack", desc: "次の攻撃が2倍になる" },
 ];
 
 // ITEMS から重複なくランダムに n 個選ぶ
@@ -281,12 +282,13 @@ export default function MainGame({ level = 1 }) {
   const [winner, setWinner] = useState(null);
 
   // アイテム関連の状態
-  const [playerItems, setPlayerItems] = useState(() => (level === 2 ? pickRandomItems(3) : []));
+  const [playerItems, setPlayerItems] = useState(() => (level >= 2 ? pickRandomItems(2) : []));
   const [itemMenuOpen, setItemMenuOpen] = useState(false);
   const [selectedItemId, setSelectedItemId] = useState(null);
   const [itemStage, setItemStage] = useState(null); // null | 'preview' | 'use_wait_hand' | 'sacrifive_choose_count'
   const [sacrifiveChoice, setSacrifiveChoice] = useState(null);
   const [guardActive, setGuardActive] = useState(false);
+  const [doubleAttackActive, setDoubleAttackActive] = useState(false);
   const [enemyGuardActive, setEnemyGuardActive] = useState(false);
   const [enemyGuardUses, setEnemyGuardUses] = useState(level >= 2 ? 1 : 0);
 
@@ -300,13 +302,14 @@ export default function MainGame({ level = 1 }) {
     setTurn("player");
     setMessage("自分の手を選んでください");
     setWinner(null);
-    // level2 ではゲーム開始時にランダムでアイテムを配布
-    setPlayerItems(level === 2 ? pickRandomItems(3) : []);
+    // level2 以上ではゲーム開始時にランダムでアイテムを配布
+    setPlayerItems(level >= 2 ? pickRandomItems(2) : []);
     setItemMenuOpen(false);
     setSelectedItemId(null);
     setItemStage(null);
     setSacrifiveChoice(null);
     setGuardActive(false);
+    setDoubleAttackActive(false);
     setEnemyGuardActive(false);
     setEnemyGuardUses(level >= 2 ? 1 : 0);
   }
@@ -318,12 +321,17 @@ export default function MainGame({ level = 1 }) {
 
       setMessage("相手がGuardで攻撃を防いだ！");
       setTurn("enemy");
+      setDoubleAttackActive(false);
 
       setTimeout(() => enemyAttack(hands), 700);
 
       return;
     }
-    const power = attackPower(hands.player[selectedHand]);
+    let power = attackPower(hands.player[selectedHand]);
+    if (doubleAttackActive) {
+      power *= 2;
+      setDoubleAttackActive(false);
+    }
     const nextEnemyHands = {
       ...hands.enemy,
       [targetHand]: attackedHand(hands.enemy[targetHand], power),
@@ -625,6 +633,13 @@ function chooseEnemyGuardHand(currentHands) {
       // メニューは開いたままにしておく
       return;
     }
+
+    if (itemId === 'doubleAttack') {
+      // Double Attack は次の攻撃を2倍にする
+      setItemStage('use_wait_hand');
+      setMessage('Double Attack: 使用する手を選んでください');
+      return;
+    }
   }
 
   // Sacrifive: 数を選択したときの処理
@@ -673,6 +688,17 @@ function chooseEnemyGuardHand(currentHands) {
       setSelectedItemId(null);
       setItemStage(null);
       setMessage(`Finger Roulette を使用しました（${rand} 本になりました）。自分の手番です`);
+      return;
+    }
+
+    if (itemId === 'doubleAttack') {
+      setSelectedHand(handSide);
+      setDoubleAttackActive(true);
+      consumeItem('doubleAttack');
+      setItemMenuOpen(false);
+      setSelectedItemId(null);
+      setItemStage(null);
+      setMessage(`Double Attack を使用しました。自分の${handLabel[handSide]}で相手を攻撃してください`);
       return;
     }
   }
@@ -730,15 +756,21 @@ function chooseEnemyGuardHand(currentHands) {
             </section>
 
             <div className="flex items-center justify-center gap-4">
-              {level === 2 ? (
+              {level >= 2 ? (
                 <div className="flex flex-col items-center">
-                  <button
-                    type="button"
-                    onClick={() => setItemMenuOpen((s) => !s)}
-                    className="border-2 border-white/60 px-4 py-2 font-black tracking-[0.12em] hover:bg-white hover:text-black"
-                  >
-                    ITEM
-                  </button>
+                  <div className="flex items-center gap-3">
+                    <div className="rounded border border-white/20 bg-white/10 px-3 py-2 text-sm text-white">
+                      アイテムを使用できます →<br />
+                      you can use items.
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setItemMenuOpen((s) => !s)}
+                      className="border-2 border-white/60 px-4 py-2 font-black tracking-[0.12em] hover:bg-white hover:text-black"
+                    >
+                      ITEM
+                    </button>
+                  </div>
 
                   {/* アイテムメニュー */}
                   {itemMenuOpen ? (
@@ -791,9 +823,9 @@ function chooseEnemyGuardHand(currentHands) {
                             {selectedItemId === it.id && itemStage === 'use_wait_hand' ? (
                               <p className="mt-1 text-xs text-white/60">
                                 {it.id === 'roulette'
-                                // FingerRouletteの使用の場合
                                   ? 'ランダムに指を変更する手を選んでください'
-                                // Sacrifiveの使用の場合
+                                  : it.id === 'doubleAttack'
+                                  ? '二倍攻撃を行う手を選んでください'
                                   : 'OUTにする自分の手を選んでください'}
                               </p>
                             ) : null}
