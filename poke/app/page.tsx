@@ -167,6 +167,14 @@ export default function Home() {
           HOW TO PLAY
         </button>
 
+        <Link
+          href="/ranking"
+          onClick={playClickSound}
+          className="text-center hover:text-yellow-400"
+        >
+          RANKING
+        </Link>
+
         <button
           onClick={() => {
             playClickSound();
