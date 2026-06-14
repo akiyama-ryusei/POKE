@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Image from "next/image";
 import ResultModal from "./ResultModal";
+import { saveGameResult } from "../lib/gameResults";
 
 // 手のデータを作る関数
 function createHand(count = 1) {
@@ -280,6 +281,7 @@ export default function MainGame({ level = 1 }) {
   const [turn, setTurn] = useState("player");
   const [message, setMessage] = useState("自分の手を選んでください");
   const [winner, setWinner] = useState(null);
+  const [turnCount, setTurnCount] = useState(0);
 
   // アイテム関連の状態
   const [playerItems, setPlayerItems] = useState(() => (level >= 2 ? pickRandomItems(2) : []));
@@ -296,12 +298,29 @@ export default function MainGame({ level = 1 }) {
   const enemyLose = isHandOut(hands.enemy.left) && isHandOut(hands.enemy.right);
   const sacrifiveUnavailable = isHandOut(hands.player.left) || isHandOut(hands.player.right);
 
+  function recordGameResult(resultWinner, resultTurns) {
+    saveGameResult({
+      level,
+      turns: resultTurns,
+      winner: resultWinner,
+    })
+      .then(({ error }) => {
+        if (error) {
+          console.error("Failed to save game result:", error);
+        }
+      })
+      .catch((error) => {
+        console.error("Failed to save game result:", error);
+      });
+  }
+
   function resetGame() {
     setHands(createInitialHands());
     setSelectedHand(null);
     setTurn("player");
     setMessage("自分の手を選んでください");
     setWinner(null);
+    setTurnCount(0);
     // level2 以上ではゲーム開始時にランダムでアイテムを配布
     setPlayerItems(level >= 2 ? pickRandomItems(2) : []);
     setItemMenuOpen(false);
@@ -316,6 +335,9 @@ export default function MainGame({ level = 1 }) {
 
   function attackEnemy(targetHand) {
     if (turn !== "player" || !selectedHand || winner) return;
+    const nextTurnCount = turnCount + 1;
+    setTurnCount(nextTurnCount);
+
     if (enemyGuardActive) {
       setEnemyGuardActive(false);
 
@@ -323,7 +345,7 @@ export default function MainGame({ level = 1 }) {
       setTurn("enemy");
       setDoubleAttackActive(false);
 
-      setTimeout(() => enemyAttack(hands), 700);
+      setTimeout(() => enemyAttack(hands, nextTurnCount), 700);
 
       return;
     }
@@ -346,6 +368,7 @@ export default function MainGame({ level = 1 }) {
     setSelectedHand(null);
 
     if (isHandOut(nextEnemyHands.left) && isHandOut(nextEnemyHands.right)) {
+      recordGameResult("player", nextTurnCount);
       setWinner("player");
       setMessage("YOU WIN!");
       return;
@@ -354,7 +377,7 @@ export default function MainGame({ level = 1 }) {
     setTurn("enemy");
     setMessage("相手の番です");
 
-    setTimeout(() => enemyAttack(nextHands), 700);
+    setTimeout(() => enemyAttack(nextHands, nextTurnCount), 700);
   }
   
   // CPUの行動を決めるための補助関数
@@ -528,7 +551,7 @@ function chooseEnemyGuardHand(currentHands) {
 }
 
   // CPUの攻撃を実行する関数
-  function enemyAttack(currentHands) {
+  function enemyAttack(currentHands, resultTurns = turnCount) {
     // Guard が有効ならこの攻撃を無効化してプレイヤーの手番に戻す
     if (guardActive) {
       setGuardActive(false);
@@ -573,6 +596,7 @@ function chooseEnemyGuardHand(currentHands) {
     });
 
     if (isHandOut(nextPlayerHands.left) && isHandOut(nextPlayerHands.right)) {
+      recordGameResult("enemy", resultTurns);
       setWinner("enemy");
       setMessage("YOU LOSE...");
       return;
