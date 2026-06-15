@@ -293,6 +293,7 @@ export default function MainGame({ level = 1 }) {
   const [doubleAttackActive, setDoubleAttackActive] = useState(false);
   const [enemyGuardActive, setEnemyGuardActive] = useState(false);
   const [enemyGuardUses, setEnemyGuardUses] = useState(level >= 2 ? 1 : 0);
+  const [enemyLives, setEnemyLives] = useState(level >= 3 ? 2 : 0);
 
   const playerLose = isHandOut(hands.player.left) && isHandOut(hands.player.right);
   const enemyLose = isHandOut(hands.enemy.left) && isHandOut(hands.enemy.right);
@@ -331,6 +332,7 @@ export default function MainGame({ level = 1 }) {
     setDoubleAttackActive(false);
     setEnemyGuardActive(false);
     setEnemyGuardUses(level >= 2 ? 1 : 0);
+    setEnemyLives(level >= 3 ? 2 : 0);
   }
 
   function attackEnemy(targetHand) {
@@ -358,7 +360,10 @@ export default function MainGame({ level = 1 }) {
       ...hands.enemy,
       [targetHand]: attackedHand(hands.enemy[targetHand], power),
     };
-
+    if (level >= 3 && enemyLives > 0 && isHandOut(nextEnemyHands[targetHand])) {
+      nextEnemyHands[targetHand] = createHand(1);
+      setEnemyLives((prev) => Math.max(prev - 1, 0));
+    }
     const nextHands = {
       ...hands,
       enemy: nextEnemyHands,
@@ -757,7 +762,11 @@ function chooseEnemyGuardHand(currentHands) {
                       🛡️ × {enemyGuardUses}
                     </span>
                     )}
-
+                    {level >= 3 && (
+                    <span className="rounded border border-rose-300 px-2 py-1 text-lg font-black text-rose-300">
+                      💀 × {enemyLives}
+                    </span>
+                    )}
                     <span className="text-sm font-bold text-rose-200">
                       {enemyLose ? "両手アウト" : "TARGET"}
                     </span>
