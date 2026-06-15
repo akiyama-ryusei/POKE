@@ -477,7 +477,7 @@ function chooseEnemyMove(currentHands) {
 
   // Level 2以上では、2手先で勝てる手を高確率で狙う
   if (level >= 2) {
-    const twoStepWinningMoves = safeMoves.filter((move) => {
+    const twoStepAttackMoves = safeMoves.filter((move) => {
       const afterEnemyAttack = simulateAttack(currentHands, "enemy", move);
       const playerMoves = getPossibleMoves(afterEnemyAttack, "player");
 
@@ -491,19 +491,23 @@ function chooseEnemyMove(currentHands) {
         const nextEnemyMoves = getPossibleMoves(afterPlayerAttack, "enemy");
 
         return nextEnemyMoves.some((nextEnemyMove) => {
+          const targetHand = nextEnemyMove.defenderHand;
           const afterNextEnemyAttack = simulateAttack(
             afterPlayerAttack,
             "enemy",
             nextEnemyMove
           );
 
-          return isPlayerLose(afterNextEnemyAttack);
+          return (
+            !isHandOut(afterPlayerAttack.player[targetHand]) &&
+            isHandOut(afterNextEnemyAttack.player[targetHand])
+          );
         });
       });
     });
 
-    if (twoStepWinningMoves.length > 0 && Math.random() < 0.7) {
-      return randomChoice(twoStepWinningMoves);
+    if (twoStepAttackMoves.length > 0 && Math.random() < 0.75) {
+      return randomChoice(twoStepAttackMoves);
     }
   }
   // 3. 安全手があるなら高確率で選ぶ
