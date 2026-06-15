@@ -323,7 +323,7 @@ export default function MainGame({ level = 1 }) {
     setWinner(null);
     setTurnCount(0);
     // level2 以上ではゲーム開始時にランダムでアイテムを配布
-    setPlayerItems(level >= 2 ? pickRandomItems(2) : []);
+    setPlayerItems(>= 2 ? pickRandomItems(2) : []);
     setItemMenuOpen(false);
     setSelectedItemId(null);
     setItemStage(null);
@@ -506,7 +506,7 @@ function chooseEnemyMove(currentHands) {
       });
     });
 
-    if (twoStepAttackMoves.length > 0 && Math.random() < 0.75) {
+    if (twoStepAttackMoves.length > 0 && Math.random() < 0.9) {
       return randomChoice(twoStepAttackMoves);
     }
   }
