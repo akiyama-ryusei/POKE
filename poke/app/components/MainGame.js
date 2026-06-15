@@ -257,7 +257,7 @@ function Hand({ owner, side, count, selected, disabled, onClick }) {
       <div className="flex w-full items-center justify-between">
         <span className="text-xs font-black tracking-[0.18em] text-white/75">{handLabel[side]}</span>
         <span className="border border-white/50 bg-white px-2 py-1 text-base font-black text-black">
-          {isOut(count) ? "OUT" : `F${count}`}
+          {isOut(count) ? "OUT" : `${count}`}
         </span>
       </div>
 
