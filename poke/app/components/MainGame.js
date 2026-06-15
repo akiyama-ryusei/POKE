@@ -2,6 +2,7 @@
 
 import { useRef, useState } from "react";
 import Image from "next/image";
+import ItemCard from "./ItemCard";
 import ResultModal from "./ResultModal";
 import { saveGameResult } from "../lib/gameResults";
 import { playSound } from "../lib/sounds";
@@ -125,113 +126,16 @@ function attackedHand(hand, power) {
 }
 
 // CPUの行動を決めるための補助関数
-function getPossibleMoves(currentHands, attacker) {
-  const defender = attacker === "enemy" ? "player" : "enemy";
-
-  const attackerOptions = handOrder.filter(
-    (side) => !isHandOut(currentHands[attacker][side])
-  );
-
-  const defenderOptions = handOrder.filter(
-    (side) => !isHandOut(currentHands[defender][side])
-  );
-
-  const moves = [];
-
-  attackerOptions.forEach((attackerHand) => {
-    defenderOptions.forEach((defenderHand) => {
-      moves.push({ attackerHand, defenderHand });
-    });
-  });
-
-  return moves;
-}
-
-function simulateAttack(currentHands, attacker, move) {
-  const defender = attacker === "enemy" ? "player" : "enemy";
-  const power = attackPower(currentHands[attacker][move.attackerHand]);
-
-  return {
-    ...currentHands,
-    [defender]: {
-      ...currentHands[defender],
-      [move.defenderHand]: attackedHand(
-        currentHands[defender][move.defenderHand],
-        power
-      ),
-    },
-  };
-}
-
-function isPlayerLose(currentHands) {
-  return (
-    isHandOut(currentHands.player.left) &&
-    isHandOut(currentHands.player.right)
-  );
-}
-
-function isEnemyLose(currentHands) {
-  return (
-    isHandOut(currentHands.enemy.left) &&
-    isHandOut(currentHands.enemy.right)
-  );
-}
-
 function randomChoice(array) {
   return array[Math.floor(Math.random() * array.length)];
 }
 
-function randomRouletteCount() {
-  return Math.floor(Math.random() * 4) + 1;
+function randomChance(rate) {
+  return Math.random() < rate;
 }
 
-function chooseEnemyMove(currentHands) {
-  const enemyMoves = getPossibleMoves(currentHands, "enemy");
-
-  if (enemyMoves.length === 0) return null;
-
-  // 1. 今勝てるなら勝つ
-  const winningMoves = enemyMoves.filter((move) => {
-    const afterEnemyAttack = simulateAttack(currentHands, "enemy", move);
-    return isPlayerLose(afterEnemyAttack);
-  });
-
-  if (winningMoves.length > 0) {
-    return randomChoice(winningMoves);
-  }
-
-  // 2. 次に負ける手は避ける
-  const safeMoves = enemyMoves.filter((move) => {
-    const afterEnemyAttack = simulateAttack(currentHands, "enemy", move);
-    const playerMoves = getPossibleMoves(afterEnemyAttack, "player");
-
-    const playerCanWin = playerMoves.some((playerMove) => {
-      const afterPlayerAttack = simulateAttack(
-        afterEnemyAttack,
-        "player",
-        playerMove
-      );
-
-      return isEnemyLose(afterPlayerAttack);
-    });
-
-    return !playerCanWin;
-  });
-
-  // 3. 安全手があるなら高確率で選ぶ
-  if (safeMoves.length > 0) {
-    if (Math.random() < 0.8) {
-      return randomChoice(safeMoves);
-    }
-  }
-
-  // 4. 安全手があるなら安全手からランダム
-  if (safeMoves.length > 0) {
-    return randomChoice(safeMoves);
-  }
-  
-  // 5. どうしようもなければランダム
-  return randomChoice(enemyMoves);
+function randomRouletteCount() {
+  return Math.floor(Math.random() * 4) + 1;
 }
 
 // 手を表示する
@@ -466,10 +370,6 @@ function isEnemyLose(currentHands) {
   );
 }
 
-function randomChoice(array) {
-  return array[Math.floor(Math.random() * array.length)];
-}
-
 function chooseEnemyMove(currentHands) {
   const enemyMoves = getPossibleMoves(currentHands, "enemy");
 
@@ -540,7 +440,7 @@ function chooseEnemyMove(currentHands) {
   }
   // 3. 安全手があるなら高確率で選ぶ
   if (safeMoves.length > 0) {
-    if (Math.random() < 0.8) {
+    if (randomChance(0.8)) {
       return randomChoice(safeMoves);
     }
   }
@@ -848,63 +748,26 @@ function chooseEnemyGuardHand(currentHands) {
 
                   {/* アイテムメニュー */}
                   {itemMenuOpen ? (
-                    <div className="mt-3 w-72 space-y-2 rounded border border-white/20 bg-black/70 p-3 text-left">
+                    <div className="mt-3 w-[min(92vw,28rem)] border-4 border-double border-white/35 bg-black/80 p-3 text-left">
                       {/* 所持アイテム一覧 */}
                       {playerItems.length === 0 ? (
-                        <p className="text-sm text-white/60">アイテムがありません</p>
+                        <div className="border-2 border-dashed border-white/25 p-4 text-center text-sm font-black tracking-[0.12em] text-white/50">
+                          アイテムがありません
+                        </div>
                       ) : (
-                        playerItems.map((it) => (
-                          <div key={it.id} className="flex flex-col">
-                            <button
-                              type="button"
+                        <div className="grid gap-3 sm:grid-cols-2">
+                          {playerItems.map((it) => (
+                            <ItemCard
+                              key={it.id}
+                              item={it}
+                              selected={selectedItemId === it.id}
+                              stage={itemStage}
+                              unavailable={it.id === 'sacrifive' && sacrifiveUnavailable}
                               onClick={() => handleItemClick(it.id)}
-                              className="text-left font-bold hover:text-yellow-300"
-                            >
-                              {it.name}
-                            </button>
-
-                            {/* 説明表示 (選択時) */}
-                            {selectedItemId === it.id && itemStage === 'preview' ? (
-                              <div className="mt-1">
-                                <p className="text-sm text-white/70">
-                                  {it.id === 'sacrifive' && sacrifiveUnavailable
-                                    ? '一方の手が既にOUTになっている為このアイテムは使用できません'
-                                    : it.desc}
-                                </p>
-                                <div className="mt-2">
-                                  <span className="text-xs text-white/60">アイテム名をもう一度押すと使用</span>
-                                </div>
-                              </div>
-                            ) : null}
-
-                            {/* Sacrifive の数選択 */}
-                            {selectedItemId === it.id && itemStage === 'sacrifive_choose_count' ? (
-                              <div className="mt-1 flex gap-2">
-                                {[1,2,3,4].map((n) => (
-                                  <button
-                                    key={n}
-                                    type="button"
-                                    onClick={() => handleSacrifiveChooseCount(n)}
-                                    className="border px-2 py-1 text-sm hover:bg-white hover:text-black"
-                                  >
-                                    {`${n}`}
-                                  </button>
-                                ))}
-                              </div>
-                            ) : null}
-
-                            {/* 使用待ちの案内 */}
-                            {selectedItemId === it.id && itemStage === 'use_wait_hand' ? (
-                              <p className="mt-1 text-xs text-white/60">
-                                {it.id === 'roulette'
-                                  ? 'ランダムに指を変更する手を選んでください'
-                                  : it.id === 'doubleAttack'
-                                  ? '二倍攻撃を行う手を選んでください'
-                                  : 'OUTにする自分の手を選んでください'}
-                              </p>
-                            ) : null}
-                          </div>
-                        ))
+                              onChooseCount={handleSacrifiveChooseCount}
+                            />
+                          ))}
+                        </div>
                       )}
                     </div>
                   ) : null}
