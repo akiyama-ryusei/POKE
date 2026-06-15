@@ -67,10 +67,16 @@ function pickRandomItems(n) {
   return picked;
 }
 // 手の画像ファイルのパスを取得する関数
-function handImagePath(owner, side, count) {
+function handImagePath(owner, side, count, useYoroi = false, useBone = false) {
   const imageCount = Math.min(count, 5);
 
   if (owner === "enemy") {
+    if (useBone) {
+      return `/images/hand_bone/hand_bone_${side}${imageCount}.png`;
+    }
+    if (useYoroi) {
+      return `/images/hand_yoroi/hand_yoroi_${side}${imageCount}.png`;
+    }
     const enemySide = side === "left" ? "left " : "right";
     return `/images/hands/hand_${enemySide}_enemy${imageCount}.png`;
   }
@@ -232,7 +238,7 @@ function chooseEnemyMove(currentHands) {
 }
 
 // 手を表示する
-function Hand({ owner, side, count, selected, disabled, onClick }) {
+function Hand({ owner, side, count, selected, disabled, onClick, useYoroi, useBone }) {
   return (
     <button
       type="button"
@@ -262,13 +268,12 @@ function Hand({ owner, side, count, selected, disabled, onClick }) {
       </div>
 
       <Image
-        src={handImagePath(owner, side, count)}
+        src={handImagePath(owner, side, count, useYoroi, useBone)}
         alt={`${owner === "player" ? "プレイヤー" : "相手"}の${handLabel[side]} 指${Math.min(count, 5)}本`}
         width={270}
         height={350}
         className="mt-2 h-40 w-auto object-contain drop-shadow-[0_12px_18px_rgba(0,0,0,0.75)] transition group-hover:scale-105"
       />
-
     </button>
   );
 }
@@ -323,7 +328,7 @@ export default function MainGame({ level = 1 }) {
     setWinner(null);
     setTurnCount(0);
     // level2 以上ではゲーム開始時にランダムでアイテムを配布
-    setPlayerItems(>= 2 ? pickRandomItems(2) : []);
+    setPlayerItems(level >= 2 ? pickRandomItems(2) : []);
     setItemMenuOpen(false);
     setSelectedItemId(null);
     setItemStage(null);
@@ -784,6 +789,8 @@ function chooseEnemyGuardHand(currentHands) {
                     owner="enemy"
                     side={side}
                     count={hands.enemy[side].count}
+                    useYoroi={level >= 3 && enemyLives === 2}
+                    useBone={level >= 3 && enemyLives === 0}
                     // アイテム使用でプレイヤーの手を選ぶフェーズ時は敵手を押せない
                     disabled={turn !== "player" || !selectedHand || winner || itemStage === 'use_wait_hand'}
                     onClick={() => attackEnemy(side)}
