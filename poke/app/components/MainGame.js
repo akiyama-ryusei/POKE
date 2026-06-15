@@ -362,8 +362,9 @@ export default function MainGame({ level = 1 }) {
 
     if (enemyGuardActive) {
       setEnemyGuardActive(false);
+      showEnemyEffect("guard");
 
-      setMessage("相手がGuardで攻撃を防いだ！");
+      setMessage("相手がGuardを発動。この攻撃を2本軽減しました");
       setTurn("enemy");
       setDoubleAttackActive(false);
 
@@ -591,14 +592,9 @@ function chooseEnemyGuardHand(currentHands) {
     if (useGuard) {
       setEnemyGuardActive(true);
       setEnemyGuardUses((prev) => Math.max(prev - 1, 0));
-      showEnemyEffect("guard");
     }
           setTurn("player");
-          setMessage(
-            useGuard
-              ? `相手がGuardを使い、攻撃しました`
-              : "自分の手を選んでください"
-    );
+          setMessage("自分の手を選んでください");
 
     const selectedMove = chooseEnemyMove(currentHands);
 
@@ -775,7 +771,10 @@ function chooseEnemyGuardHand(currentHands) {
                 <div className="pointer-events-none absolute inset-x-0 top-12 z-20 flex justify-center">
                   <div className="border-4 border-yellow-300 bg-black px-5 py-3 text-center text-xl font-black tracking-[0.08em] text-yellow-300 shadow-[0_0_24px_rgba(253,224,71,0.45)] animate-pulse">
                     <span className="block text-3xl">🛡️</span>
-                    <span>ガードされた!</span>
+                    <span className="block">相手がGuardを発動!</span>
+                    <span className="mt-1 block text-sm tracking-[0.04em] text-white">
+                      この攻撃を2本軽減
+                    </span>
                   </div>
                 </div>
               ) : null}
