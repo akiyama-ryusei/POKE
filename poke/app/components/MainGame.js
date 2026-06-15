@@ -297,6 +297,7 @@ export default function MainGame({ level = 1 }) {
   const [enemyGuardUses, setEnemyGuardUses] = useState(level >= 2 ? 1 : 0);
   const [enemyEffect, setEnemyEffect] = useState(null);
   const enemyEffectTimerRef = useRef(null);
+  const guardAudioRef = useRef(null);
 
   const playerLose = isHandOut(hands.player.left) && isHandOut(hands.player.right);
   const enemyLose = isHandOut(hands.enemy.left) && isHandOut(hands.enemy.right);
@@ -323,11 +324,28 @@ export default function MainGame({ level = 1 }) {
       clearTimeout(enemyEffectTimerRef.current);
     }
 
+    if (effect === "guard") {
+      playGuardSound();
+    }
+
     setEnemyEffect(effect);
     enemyEffectTimerRef.current = setTimeout(() => {
       setEnemyEffect(null);
       enemyEffectTimerRef.current = null;
     }, ENEMY_EFFECT_DURATION_MS);
+  }
+
+  function playGuardSound() {
+    if (typeof Audio === "undefined") return;
+
+    if (!guardAudioRef.current) {
+      guardAudioRef.current = new Audio("/sounds/guard.mp3");
+      guardAudioRef.current.volume = 0.35;
+    }
+
+    guardAudioRef.current.pause();
+    guardAudioRef.current.currentTime = 0;
+    guardAudioRef.current.play().catch(() => {});
   }
 
   function resetGame() {
@@ -577,6 +595,7 @@ function chooseEnemyGuardHand(currentHands) {
   function enemyAttack(currentHands, resultTurns = turnCount) {
     // Guard が有効ならこの攻撃を無効化してプレイヤーの手番に戻す
     if (guardActive) {
+      playGuardSound();
       setGuardActive(false);
       setTurn("player");
       setMessage("相手の攻撃をガードしました。自分の手を選んでください");
