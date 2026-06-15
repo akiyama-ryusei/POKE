@@ -260,7 +260,7 @@ function Hand({ owner, side, count, selected, disabled, onClick }) {
       <div className="flex w-full items-center justify-between">
         <span className="text-xs font-black tracking-[0.18em] text-white/75">{handLabel[side]}</span>
         <span className="border border-white/50 bg-white px-2 py-1 text-base font-black text-black">
-          {isOut(count) ? "OUT" : `F${count}`}
+          {isOut(count) ? "OUT" : `${count}`}
         </span>
       </div>
 
@@ -298,6 +298,7 @@ export default function MainGame({ level = 1 }) {
   const [enemyGuardUses, setEnemyGuardUses] = useState(level >= 2 ? 1 : 0);
   const [enemyEffect, setEnemyEffect] = useState(null);
   const enemyEffectTimerRef = useRef(null);
+  const [enemyLives, setEnemyLives] = useState(level >= 3 ? 2 : 0);
 
   const playerLose = isHandOut(hands.player.left) && isHandOut(hands.player.right);
   const enemyLose = isHandOut(hands.enemy.left) && isHandOut(hands.enemy.right);
@@ -348,7 +349,7 @@ export default function MainGame({ level = 1 }) {
     setWinner(null);
     setTurnCount(0);
     // level2 以上ではゲーム開始時にランダムでアイテムを配布
-    setPlayerItems(level >= 2 ? pickRandomItems(2) : []);
+    setPlayerItems(>= 2 ? pickRandomItems(2) : []);
     setItemMenuOpen(false);
     setSelectedItemId(null);
     setItemStage(null);
@@ -358,6 +359,7 @@ export default function MainGame({ level = 1 }) {
     setEnemyGuardActive(false);
     setEnemyGuardUses(level >= 2 ? 1 : 0);
     setEnemyEffect(null);
+    setEnemyLives(level >= 3 ? 2 : 0);
   }
 
   function attackEnemy(targetHand) {
@@ -386,7 +388,10 @@ export default function MainGame({ level = 1 }) {
       ...hands.enemy,
       [targetHand]: attackedHand(hands.enemy[targetHand], power),
     };
-
+    if (level >= 3 && enemyLives > 0 && isHandOut(nextEnemyHands[targetHand])) {
+      nextEnemyHands[targetHand] = createHand(1);
+      setEnemyLives((prev) => Math.max(prev - 1, 0));
+    }
     const nextHands = {
       ...hands,
       enemy: nextEnemyHands,
@@ -500,7 +505,7 @@ function chooseEnemyMove(currentHands) {
 
   // Level 2以上では、2手先で勝てる手を高確率で狙う
   if (level >= 2) {
-    const twoStepWinningMoves = safeMoves.filter((move) => {
+    const twoStepAttackMoves = safeMoves.filter((move) => {
       const afterEnemyAttack = simulateAttack(currentHands, "enemy", move);
       const playerMoves = getPossibleMoves(afterEnemyAttack, "player");
 
@@ -514,19 +519,23 @@ function chooseEnemyMove(currentHands) {
         const nextEnemyMoves = getPossibleMoves(afterPlayerAttack, "enemy");
 
         return nextEnemyMoves.some((nextEnemyMove) => {
+          const targetHand = nextEnemyMove.defenderHand;
           const afterNextEnemyAttack = simulateAttack(
             afterPlayerAttack,
             "enemy",
             nextEnemyMove
           );
 
-          return isPlayerLose(afterNextEnemyAttack);
+          return (
+            !isHandOut(afterPlayerAttack.player[targetHand]) &&
+            isHandOut(afterNextEnemyAttack.player[targetHand])
+          );
         });
       });
     });
 
-    if (twoStepWinningMoves.length > 0 && Math.random() < 0.7) {
-      return randomChoice(twoStepWinningMoves);
+    if (twoStepAttackMoves.length > 0 && Math.random() < 0.9) {
+      return randomChoice(twoStepAttackMoves);
     }
   }
   // 3. 安全手があるなら高確率で選ぶ
@@ -794,7 +803,11 @@ function chooseEnemyGuardHand(currentHands) {
                       🛡️ × {enemyGuardUses}
                     </span>
                     )}
-
+                    {level >= 3 && (
+                    <span className="rounded border border-rose-300 px-2 py-1 text-lg font-black text-rose-300">
+                      💀 × {enemyLives}
+                    </span>
+                    )}
                     <span className="text-sm font-bold text-rose-200">
                       {enemyLose ? "両手アウト" : "TARGET"}
                     </span>
