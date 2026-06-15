@@ -1,10 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import Image from "next/image";
 import ItemCard from "./ItemCard";
 import ResultModal from "./ResultModal";
 import { saveGameResult } from "../lib/gameResults";
+import { playSound } from "../lib/sounds";
 
 // 手のデータを作る関数
 function createHand(count = 1) {
@@ -56,6 +57,8 @@ const ITEMS = [
   { id: "roulette", name: "Finger Roulette", desc: "自分の選んだ手の指を1-4のランダムに変更する（そのターンのみ）" },
   { id: "doubleAttack", name: "Double Attack", desc: "次の攻撃が2倍になる" },
 ];
+
+const ENEMY_EFFECT_DURATION_MS = 1800;
 
 // ITEMS から重複なくランダムに n 個選ぶ
 function pickRandomItems(n) {
@@ -161,7 +164,7 @@ function Hand({ owner, side, count, selected, disabled, onClick }) {
       <div className="flex w-full items-center justify-between">
         <span className="text-xs font-black tracking-[0.18em] text-white/75">{handLabel[side]}</span>
         <span className="border border-white/50 bg-white px-2 py-1 text-base font-black text-black">
-          {isOut(count) ? "OUT" : `F${count}`}
+          {isOut(count) ? "OUT" : `${count}`}
         </span>
       </div>
 
@@ -197,6 +200,9 @@ export default function MainGame({ level = 1 }) {
   const [doubleAttackActive, setDoubleAttackActive] = useState(false);
   const [enemyGuardActive, setEnemyGuardActive] = useState(false);
   const [enemyGuardUses, setEnemyGuardUses] = useState(level >= 2 ? 1 : 0);
+  const [enemyEffect, setEnemyEffect] = useState(null);
+  const enemyEffectTimerRef = useRef(null);
+  const [enemyLives, setEnemyLives] = useState(level >= 3 ? 2 : 0);
 
   const playerLose = isHandOut(hands.player.left) && isHandOut(hands.player.right);
   const enemyLose = isHandOut(hands.enemy.left) && isHandOut(hands.enemy.right);
@@ -218,7 +224,28 @@ export default function MainGame({ level = 1 }) {
       });
   }
 
+  function showEnemyEffect(effect) {
+    if (enemyEffectTimerRef.current) {
+      clearTimeout(enemyEffectTimerRef.current);
+    }
+
+    if (effect === "guard") {
+      playSound("guard");
+    }
+
+    setEnemyEffect(effect);
+    enemyEffectTimerRef.current = setTimeout(() => {
+      setEnemyEffect(null);
+      enemyEffectTimerRef.current = null;
+    }, ENEMY_EFFECT_DURATION_MS);
+  }
+
   function resetGame() {
+    if (enemyEffectTimerRef.current) {
+      clearTimeout(enemyEffectTimerRef.current);
+      enemyEffectTimerRef.current = null;
+    }
+
     setHands(createInitialHands());
     setSelectedHand(null);
     setTurn("player");
@@ -235,6 +262,8 @@ export default function MainGame({ level = 1 }) {
     setDoubleAttackActive(false);
     setEnemyGuardActive(false);
     setEnemyGuardUses(level >= 2 ? 1 : 0);
+    setEnemyEffect(null);
+    setEnemyLives(level >= 3 ? 2 : 0);
   }
 
   function attackEnemy(targetHand) {
@@ -244,8 +273,9 @@ export default function MainGame({ level = 1 }) {
 
     if (enemyGuardActive) {
       setEnemyGuardActive(false);
+      showEnemyEffect("guard");
 
-      setMessage("相手がGuardで攻撃を防いだ！");
+      setMessage("相手がGuardを発動。この攻撃を2本軽減しました");
       setTurn("enemy");
       setDoubleAttackActive(false);
 
@@ -262,7 +292,10 @@ export default function MainGame({ level = 1 }) {
       ...hands.enemy,
       [targetHand]: attackedHand(hands.enemy[targetHand], power),
     };
-
+    if (level >= 3 && enemyLives > 0 && isHandOut(nextEnemyHands[targetHand])) {
+      nextEnemyHands[targetHand] = createHand(1);
+      setEnemyLives((prev) => Math.max(prev - 1, 0));
+    }
     const nextHands = {
       ...hands,
       enemy: nextEnemyHands,
@@ -372,7 +405,7 @@ function chooseEnemyMove(currentHands) {
 
   // Level 2以上では、2手先で勝てる手を高確率で狙う
   if (level >= 2) {
-    const twoStepWinningMoves = safeMoves.filter((move) => {
+    const twoStepAttackMoves = safeMoves.filter((move) => {
       const afterEnemyAttack = simulateAttack(currentHands, "enemy", move);
       const playerMoves = getPossibleMoves(afterEnemyAttack, "player");
 
@@ -386,19 +419,23 @@ function chooseEnemyMove(currentHands) {
         const nextEnemyMoves = getPossibleMoves(afterPlayerAttack, "enemy");
 
         return nextEnemyMoves.some((nextEnemyMove) => {
+          const targetHand = nextEnemyMove.defenderHand;
           const afterNextEnemyAttack = simulateAttack(
             afterPlayerAttack,
             "enemy",
             nextEnemyMove
           );
 
-          return isPlayerLose(afterNextEnemyAttack);
+          return (
+            !isHandOut(afterPlayerAttack.player[targetHand]) &&
+            isHandOut(afterNextEnemyAttack.player[targetHand])
+          );
         });
       });
     });
 
-    if (twoStepWinningMoves.length > 0 && randomChance(0.7)) {
-      return randomChoice(twoStepWinningMoves);
+    if (twoStepAttackMoves.length > 0 && Math.random() < 0.9) {
+      return randomChoice(twoStepAttackMoves);
     }
   }
   // 3. 安全手があるなら高確率で選ぶ
@@ -454,6 +491,7 @@ function chooseEnemyGuardHand(currentHands) {
   function enemyAttack(currentHands, resultTurns = turnCount) {
     // Guard が有効ならこの攻撃を無効化してプレイヤーの手番に戻す
     if (guardActive) {
+      playSound("guard");
       setGuardActive(false);
       setTurn("player");
       setMessage("相手の攻撃をガードしました。自分の手を選んでください");
@@ -471,11 +509,7 @@ function chooseEnemyGuardHand(currentHands) {
       setEnemyGuardUses((prev) => Math.max(prev - 1, 0));
     }
           setTurn("player");
-          setMessage(
-            useGuard
-              ? `相手がGuardを使い、攻撃しました`
-              : "自分の手を選んでください"
-    );
+          setMessage("自分の手を選んでください");
 
     const selectedMove = chooseEnemyMove(currentHands);
 
@@ -647,7 +681,19 @@ function chooseEnemyGuardHand(currentHands) {
 
         <section className="flex flex-1">
           <div className="flex min-h-[560px] w-full flex-col justify-between gap-4 border-4 border-double border-white/40 bg-[radial-gradient(circle_at_center,#1f2937_0%,#020617_62%,#000_100%)] p-4">
-            <section>
+            <section className="relative">
+              {enemyEffect === "guard" ? (
+                <div className="pointer-events-none absolute inset-x-0 top-12 z-20 flex justify-center">
+                  <div className="border-4 border-yellow-300 bg-black px-5 py-3 text-center text-xl font-black tracking-[0.08em] text-yellow-300 shadow-[0_0_24px_rgba(253,224,71,0.45)] animate-pulse">
+                    <span className="block text-3xl">🛡️</span>
+                    <span className="block">相手がGuardを発動!</span>
+                    <span className="mt-1 block text-sm tracking-[0.04em] text-white">
+                      この攻撃を2本軽減
+                    </span>
+                  </div>
+                </div>
+              ) : null}
+
               <div className="mb-3 flex items-center justify-between">
                 <h2 className="text-2xl font-black tracking-[0.12em] text-rose-200">ENEMY</h2>
 
@@ -657,7 +703,11 @@ function chooseEnemyGuardHand(currentHands) {
                       🛡️ × {enemyGuardUses}
                     </span>
                     )}
-
+                    {level >= 3 && (
+                    <span className="rounded border border-rose-300 px-2 py-1 text-lg font-black text-rose-300">
+                      💀 × {enemyLives}
+                    </span>
+                    )}
                     <span className="text-sm font-bold text-rose-200">
                       {enemyLose ? "両手アウト" : "TARGET"}
                     </span>
