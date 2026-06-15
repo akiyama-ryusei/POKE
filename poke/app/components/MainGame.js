@@ -1,9 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import Image from "next/image";
+import ItemCard from "./ItemCard";
 import ResultModal from "./ResultModal";
 import { saveGameResult } from "../lib/gameResults";
+import { playSound } from "../lib/sounds";
 
 // 手のデータを作る関数
 function createHand(count = 1) {
@@ -55,6 +57,8 @@ const ITEMS = [
   { id: "roulette", name: "Finger Roulette", desc: "自分の選んだ手の指を1-4のランダムに変更する（そのターンのみ）" },
   { id: "doubleAttack", name: "Double Attack", desc: "次の攻撃が2倍になる" },
 ];
+
+const ENEMY_EFFECT_DURATION_MS = 1800;
 
 // ITEMS から重複なくランダムに n 個選ぶ
 function pickRandomItems(n) {
@@ -128,113 +132,16 @@ function attackedHand(hand, power) {
 }
 
 // CPUの行動を決めるための補助関数
-function getPossibleMoves(currentHands, attacker) {
-  const defender = attacker === "enemy" ? "player" : "enemy";
-
-  const attackerOptions = handOrder.filter(
-    (side) => !isHandOut(currentHands[attacker][side])
-  );
-
-  const defenderOptions = handOrder.filter(
-    (side) => !isHandOut(currentHands[defender][side])
-  );
-
-  const moves = [];
-
-  attackerOptions.forEach((attackerHand) => {
-    defenderOptions.forEach((defenderHand) => {
-      moves.push({ attackerHand, defenderHand });
-    });
-  });
-
-  return moves;
-}
-
-function simulateAttack(currentHands, attacker, move) {
-  const defender = attacker === "enemy" ? "player" : "enemy";
-  const power = attackPower(currentHands[attacker][move.attackerHand]);
-
-  return {
-    ...currentHands,
-    [defender]: {
-      ...currentHands[defender],
-      [move.defenderHand]: attackedHand(
-        currentHands[defender][move.defenderHand],
-        power
-      ),
-    },
-  };
-}
-
-function isPlayerLose(currentHands) {
-  return (
-    isHandOut(currentHands.player.left) &&
-    isHandOut(currentHands.player.right)
-  );
-}
-
-function isEnemyLose(currentHands) {
-  return (
-    isHandOut(currentHands.enemy.left) &&
-    isHandOut(currentHands.enemy.right)
-  );
-}
-
 function randomChoice(array) {
   return array[Math.floor(Math.random() * array.length)];
 }
 
-function randomRouletteCount() {
-  return Math.floor(Math.random() * 4) + 1;
+function randomChance(rate) {
+  return Math.random() < rate;
 }
 
-function chooseEnemyMove(currentHands) {
-  const enemyMoves = getPossibleMoves(currentHands, "enemy");
-
-  if (enemyMoves.length === 0) return null;
-
-  // 1. 今勝てるなら勝つ
-  const winningMoves = enemyMoves.filter((move) => {
-    const afterEnemyAttack = simulateAttack(currentHands, "enemy", move);
-    return isPlayerLose(afterEnemyAttack);
-  });
-
-  if (winningMoves.length > 0) {
-    return randomChoice(winningMoves);
-  }
-
-  // 2. 次に負ける手は避ける
-  const safeMoves = enemyMoves.filter((move) => {
-    const afterEnemyAttack = simulateAttack(currentHands, "enemy", move);
-    const playerMoves = getPossibleMoves(afterEnemyAttack, "player");
-
-    const playerCanWin = playerMoves.some((playerMove) => {
-      const afterPlayerAttack = simulateAttack(
-        afterEnemyAttack,
-        "player",
-        playerMove
-      );
-
-      return isEnemyLose(afterPlayerAttack);
-    });
-
-    return !playerCanWin;
-  });
-
-  // 3. 安全手があるなら高確率で選ぶ
-  if (safeMoves.length > 0) {
-    if (Math.random() < 0.8) {
-      return randomChoice(safeMoves);
-    }
-  }
-
-  // 4. 安全手があるなら安全手からランダム
-  if (safeMoves.length > 0) {
-    return randomChoice(safeMoves);
-  }
-  
-  // 5. どうしようもなければランダム
-  return randomChoice(enemyMoves);
+function randomRouletteCount() {
+  return Math.floor(Math.random() * 4) + 1;
 }
 
 // 手を表示する
@@ -298,6 +205,8 @@ export default function MainGame({ level = 1 }) {
   const [doubleAttackActive, setDoubleAttackActive] = useState(false);
   const [enemyGuardActive, setEnemyGuardActive] = useState(false);
   const [enemyGuardUses, setEnemyGuardUses] = useState(level >= 2 ? 1 : 0);
+  const [enemyEffect, setEnemyEffect] = useState(null);
+  const enemyEffectTimerRef = useRef(null);
   const [enemyLives, setEnemyLives] = useState(level >= 3 ? 2 : 0);
 
   const playerLose = isHandOut(hands.player.left) && isHandOut(hands.player.right);
@@ -320,7 +229,28 @@ export default function MainGame({ level = 1 }) {
       });
   }
 
+  function showEnemyEffect(effect) {
+    if (enemyEffectTimerRef.current) {
+      clearTimeout(enemyEffectTimerRef.current);
+    }
+
+    if (effect === "guard") {
+      playSound("guard");
+    }
+
+    setEnemyEffect(effect);
+    enemyEffectTimerRef.current = setTimeout(() => {
+      setEnemyEffect(null);
+      enemyEffectTimerRef.current = null;
+    }, ENEMY_EFFECT_DURATION_MS);
+  }
+
   function resetGame() {
+    if (enemyEffectTimerRef.current) {
+      clearTimeout(enemyEffectTimerRef.current);
+      enemyEffectTimerRef.current = null;
+    }
+
     setHands(createInitialHands());
     setSelectedHand(null);
     setTurn("player");
@@ -337,6 +267,7 @@ export default function MainGame({ level = 1 }) {
     setDoubleAttackActive(false);
     setEnemyGuardActive(false);
     setEnemyGuardUses(level >= 2 ? 1 : 0);
+    setEnemyEffect(null);
     setEnemyLives(level >= 3 ? 2 : 0);
   }
 
@@ -347,8 +278,9 @@ export default function MainGame({ level = 1 }) {
 
     if (enemyGuardActive) {
       setEnemyGuardActive(false);
+      showEnemyEffect("guard");
 
-      setMessage("相手がGuardで攻撃を防いだ！");
+      setMessage("相手がGuardを発動。この攻撃を2本軽減しました");
       setTurn("enemy");
       setDoubleAttackActive(false);
 
@@ -443,10 +375,6 @@ function isEnemyLose(currentHands) {
   );
 }
 
-function randomChoice(array) {
-  return array[Math.floor(Math.random() * array.length)];
-}
-
 function chooseEnemyMove(currentHands) {
   const enemyMoves = getPossibleMoves(currentHands, "enemy");
 
@@ -517,7 +445,7 @@ function chooseEnemyMove(currentHands) {
   }
   // 3. 安全手があるなら高確率で選ぶ
   if (safeMoves.length > 0) {
-    if (Math.random() < 0.8) {
+    if (randomChance(0.8)) {
       return randomChoice(safeMoves);
     }
   }
@@ -568,6 +496,7 @@ function chooseEnemyGuardHand(currentHands) {
   function enemyAttack(currentHands, resultTurns = turnCount) {
     // Guard が有効ならこの攻撃を無効化してプレイヤーの手番に戻す
     if (guardActive) {
+      playSound("guard");
       setGuardActive(false);
       setTurn("player");
       setMessage("相手の攻撃をガードしました。自分の手を選んでください");
@@ -585,11 +514,7 @@ function chooseEnemyGuardHand(currentHands) {
       setEnemyGuardUses((prev) => Math.max(prev - 1, 0));
     }
           setTurn("player");
-          setMessage(
-            useGuard
-              ? `相手がGuardを使い、攻撃しました`
-              : "自分の手を選んでください"
-    );
+          setMessage("自分の手を選んでください");
 
     const selectedMove = chooseEnemyMove(currentHands);
 
@@ -761,7 +686,19 @@ function chooseEnemyGuardHand(currentHands) {
 
         <section className="flex flex-1">
           <div className="flex min-h-[560px] w-full flex-col justify-between gap-4 border-4 border-double border-white/40 bg-[radial-gradient(circle_at_center,#1f2937_0%,#020617_62%,#000_100%)] p-4">
-            <section>
+            <section className="relative">
+              {enemyEffect === "guard" ? (
+                <div className="pointer-events-none absolute inset-x-0 top-12 z-20 flex justify-center">
+                  <div className="border-4 border-yellow-300 bg-black px-5 py-3 text-center text-xl font-black tracking-[0.08em] text-yellow-300 shadow-[0_0_24px_rgba(253,224,71,0.45)] animate-pulse">
+                    <span className="block text-3xl">🛡️</span>
+                    <span className="block">相手がGuardを発動!</span>
+                    <span className="mt-1 block text-sm tracking-[0.04em] text-white">
+                      この攻撃を2本軽減
+                    </span>
+                  </div>
+                </div>
+              ) : null}
+
               <div className="mb-3 flex items-center justify-between">
                 <h2 className="text-2xl font-black tracking-[0.12em] text-rose-200">ENEMY</h2>
 
@@ -818,63 +755,26 @@ function chooseEnemyGuardHand(currentHands) {
 
                   {/* アイテムメニュー */}
                   {itemMenuOpen ? (
-                    <div className="mt-3 w-72 space-y-2 rounded border border-white/20 bg-black/70 p-3 text-left">
+                    <div className="mt-3 w-[min(92vw,28rem)] border-4 border-double border-white/35 bg-black/80 p-3 text-left">
                       {/* 所持アイテム一覧 */}
                       {playerItems.length === 0 ? (
-                        <p className="text-sm text-white/60">アイテムがありません</p>
+                        <div className="border-2 border-dashed border-white/25 p-4 text-center text-sm font-black tracking-[0.12em] text-white/50">
+                          アイテムがありません
+                        </div>
                       ) : (
-                        playerItems.map((it) => (
-                          <div key={it.id} className="flex flex-col">
-                            <button
-                              type="button"
+                        <div className="grid gap-3 sm:grid-cols-2">
+                          {playerItems.map((it) => (
+                            <ItemCard
+                              key={it.id}
+                              item={it}
+                              selected={selectedItemId === it.id}
+                              stage={itemStage}
+                              unavailable={it.id === 'sacrifive' && sacrifiveUnavailable}
                               onClick={() => handleItemClick(it.id)}
-                              className="text-left font-bold hover:text-yellow-300"
-                            >
-                              {it.name}
-                            </button>
-
-                            {/* 説明表示 (選択時) */}
-                            {selectedItemId === it.id && itemStage === 'preview' ? (
-                              <div className="mt-1">
-                                <p className="text-sm text-white/70">
-                                  {it.id === 'sacrifive' && sacrifiveUnavailable
-                                    ? '一方の手が既にOUTになっている為このアイテムは使用できません'
-                                    : it.desc}
-                                </p>
-                                <div className="mt-2">
-                                  <span className="text-xs text-white/60">アイテム名をもう一度押すと使用</span>
-                                </div>
-                              </div>
-                            ) : null}
-
-                            {/* Sacrifive の数選択 */}
-                            {selectedItemId === it.id && itemStage === 'sacrifive_choose_count' ? (
-                              <div className="mt-1 flex gap-2">
-                                {[1,2,3,4].map((n) => (
-                                  <button
-                                    key={n}
-                                    type="button"
-                                    onClick={() => handleSacrifiveChooseCount(n)}
-                                    className="border px-2 py-1 text-sm hover:bg-white hover:text-black"
-                                  >
-                                    {`${n}`}
-                                  </button>
-                                ))}
-                              </div>
-                            ) : null}
-
-                            {/* 使用待ちの案内 */}
-                            {selectedItemId === it.id && itemStage === 'use_wait_hand' ? (
-                              <p className="mt-1 text-xs text-white/60">
-                                {it.id === 'roulette'
-                                  ? 'ランダムに指を変更する手を選んでください'
-                                  : it.id === 'doubleAttack'
-                                  ? '二倍攻撃を行う手を選んでください'
-                                  : 'OUTにする自分の手を選んでください'}
-                              </p>
-                            ) : null}
-                          </div>
-                        ))
+                              onChooseCount={handleSacrifiveChooseCount}
+                            />
+                          ))}
+                        </div>
                       )}
                     </div>
                   ) : null}
