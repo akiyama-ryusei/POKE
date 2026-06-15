@@ -349,7 +349,7 @@ export default function MainGame({ level = 1 }) {
     setWinner(null);
     setTurnCount(0);
     // level2 以上ではゲーム開始時にランダムでアイテムを配布
-    setPlayerItems(>= 2 ? pickRandomItems(2) : []);
+    setPlayerItems(level >= 2 ? pickRandomItems(2) : []);
     setItemMenuOpen(false);
     setSelectedItemId(null);
     setItemStage(null);
