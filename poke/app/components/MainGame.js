@@ -1,9 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import Image from "next/image";
 import ResultModal from "./ResultModal";
 import { saveGameResult } from "../lib/gameResults";
+import { playSound } from "../lib/sounds";
 
 // 手のデータを作る関数
 function createHand(count = 1) {
@@ -55,6 +56,8 @@ const ITEMS = [
   { id: "roulette", name: "Finger Roulette", desc: "自分の選んだ手の指を1-4のランダムに変更する（そのターンのみ）" },
   { id: "doubleAttack", name: "Double Attack", desc: "次の攻撃が2倍になる" },
 ];
+
+const ENEMY_EFFECT_DURATION_MS = 1800;
 
 // ITEMS から重複なくランダムに n 個選ぶ
 function pickRandomItems(n) {
@@ -293,6 +296,8 @@ export default function MainGame({ level = 1 }) {
   const [doubleAttackActive, setDoubleAttackActive] = useState(false);
   const [enemyGuardActive, setEnemyGuardActive] = useState(false);
   const [enemyGuardUses, setEnemyGuardUses] = useState(level >= 2 ? 1 : 0);
+  const [enemyEffect, setEnemyEffect] = useState(null);
+  const enemyEffectTimerRef = useRef(null);
   const [enemyLives, setEnemyLives] = useState(level >= 3 ? 2 : 0);
 
   const playerLose = isHandOut(hands.player.left) && isHandOut(hands.player.right);
@@ -315,7 +320,28 @@ export default function MainGame({ level = 1 }) {
       });
   }
 
+  function showEnemyEffect(effect) {
+    if (enemyEffectTimerRef.current) {
+      clearTimeout(enemyEffectTimerRef.current);
+    }
+
+    if (effect === "guard") {
+      playSound("guard");
+    }
+
+    setEnemyEffect(effect);
+    enemyEffectTimerRef.current = setTimeout(() => {
+      setEnemyEffect(null);
+      enemyEffectTimerRef.current = null;
+    }, ENEMY_EFFECT_DURATION_MS);
+  }
+
   function resetGame() {
+    if (enemyEffectTimerRef.current) {
+      clearTimeout(enemyEffectTimerRef.current);
+      enemyEffectTimerRef.current = null;
+    }
+
     setHands(createInitialHands());
     setSelectedHand(null);
     setTurn("player");
@@ -332,6 +358,7 @@ export default function MainGame({ level = 1 }) {
     setDoubleAttackActive(false);
     setEnemyGuardActive(false);
     setEnemyGuardUses(level >= 2 ? 1 : 0);
+    setEnemyEffect(null);
     setEnemyLives(level >= 3 ? 2 : 0);
   }
 
@@ -342,8 +369,9 @@ export default function MainGame({ level = 1 }) {
 
     if (enemyGuardActive) {
       setEnemyGuardActive(false);
+      showEnemyEffect("guard");
 
-      setMessage("相手がGuardで攻撃を防いだ！");
+      setMessage("相手がGuardを発動。この攻撃を2本軽減しました");
       setTurn("enemy");
       setDoubleAttackActive(false);
 
@@ -563,6 +591,7 @@ function chooseEnemyGuardHand(currentHands) {
   function enemyAttack(currentHands, resultTurns = turnCount) {
     // Guard が有効ならこの攻撃を無効化してプレイヤーの手番に戻す
     if (guardActive) {
+      playSound("guard");
       setGuardActive(false);
       setTurn("player");
       setMessage("相手の攻撃をガードしました。自分の手を選んでください");
@@ -580,11 +609,7 @@ function chooseEnemyGuardHand(currentHands) {
       setEnemyGuardUses((prev) => Math.max(prev - 1, 0));
     }
           setTurn("player");
-          setMessage(
-            useGuard
-              ? `相手がGuardを使い、攻撃しました`
-              : "自分の手を選んでください"
-    );
+          setMessage("自分の手を選んでください");
 
     const selectedMove = chooseEnemyMove(currentHands);
 
@@ -756,7 +781,19 @@ function chooseEnemyGuardHand(currentHands) {
 
         <section className="flex flex-1">
           <div className="flex min-h-[560px] w-full flex-col justify-between gap-4 border-4 border-double border-white/40 bg-[radial-gradient(circle_at_center,#1f2937_0%,#020617_62%,#000_100%)] p-4">
-            <section>
+            <section className="relative">
+              {enemyEffect === "guard" ? (
+                <div className="pointer-events-none absolute inset-x-0 top-12 z-20 flex justify-center">
+                  <div className="border-4 border-yellow-300 bg-black px-5 py-3 text-center text-xl font-black tracking-[0.08em] text-yellow-300 shadow-[0_0_24px_rgba(253,224,71,0.45)] animate-pulse">
+                    <span className="block text-3xl">🛡️</span>
+                    <span className="block">相手がGuardを発動!</span>
+                    <span className="mt-1 block text-sm tracking-[0.04em] text-white">
+                      この攻撃を2本軽減
+                    </span>
+                  </div>
+                </div>
+              ) : null}
+
               <div className="mb-3 flex items-center justify-between">
                 <h2 className="text-2xl font-black tracking-[0.12em] text-rose-200">ENEMY</h2>
 

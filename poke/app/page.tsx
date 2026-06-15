@@ -2,14 +2,13 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { playSound } from "./lib/sounds";
 
 export default function Home() {
   const [screen, setScreen] = useState("title");
   const [ruleLang, setRuleLang] = useState("ja");
   const playClickSound = () => {
-    const audio = new Audio("/sounds/select.mp3");
-    audio.volume = 0.2;
-    audio.play().catch(() => {});
+    playSound("select");
   };
 
   if (screen === "level") {
