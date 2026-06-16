@@ -1,11 +1,11 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import ItemCard from "./ItemCard";
 import ResultModal from "./ResultModal";
 import { saveGameResult } from "../lib/gameResults";
-import { playSound } from "../lib/sounds";
+import { playBattleBgm, playSound, stopBattleBgm } from "../lib/sounds";
 
 // 手のデータを作る関数
 function createHand(count = 1) {
@@ -213,6 +213,20 @@ export default function MainGame({ level = 1 }) {
   const enemyLose = isHandOut(hands.enemy.left) && isHandOut(hands.enemy.right);
   const sacrifiveUnavailable = isHandOut(hands.player.left) || isHandOut(hands.player.right);
 
+  useEffect(() => {
+    playBattleBgm();
+
+    return () => {
+      stopBattleBgm();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (winner) {
+      stopBattleBgm();
+    }
+  }, [winner]);
+
   function recordGameResult(resultWinner, resultTurns) {
     saveGameResult({
       level,
@@ -246,6 +260,8 @@ export default function MainGame({ level = 1 }) {
   }
 
   function resetGame() {
+    playBattleBgm();
+
     if (enemyEffectTimerRef.current) {
       clearTimeout(enemyEffectTimerRef.current);
       enemyEffectTimerRef.current = null;
@@ -439,7 +455,7 @@ function chooseEnemyMove(currentHands) {
       });
     });
 
-    if (twoStepAttackMoves.length > 0 && Math.random() < 0.9) {
+    if (twoStepAttackMoves.length > 0 && randomChance(0.9)) {
       return randomChoice(twoStepAttackMoves);
     }
   }

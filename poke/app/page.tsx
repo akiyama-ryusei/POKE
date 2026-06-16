@@ -2,13 +2,17 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { playSound } from "./lib/sounds";
+import { playBattleBgm, playSound } from "./lib/sounds";
 
 export default function Home() {
   const [screen, setScreen] = useState("title");
   const [ruleLang, setRuleLang] = useState("ja");
   const playClickSound = () => {
     playSound("select");
+  };
+  const startLevel = () => {
+    playClickSound();
+    playBattleBgm();
   };
 
   if (screen === "level") {
@@ -19,21 +23,21 @@ export default function Home() {
         <div className="flex flex-col gap-4 text-2xl">
           <Link
             href="/game/level1"
-            onClick={playClickSound}
+            onClick={startLevel}
             className="text-center hover:text-yellow-400"
           >
             Level 1
           </Link>
           <Link
             href="/game/level2"
-            onClick={playClickSound}
+            onClick={startLevel}
             className="text-center hover:text-yellow-400"
           >
             Level 2
           </Link>
           <Link
             href="/game/level3"
-            onClick={playClickSound}
+            onClick={startLevel}
             className="text-center hover:text-yellow-400"
           >
             Level 3
@@ -122,7 +126,7 @@ export default function Home() {
 
         <div className="text-center text-xl leading-10">
           <p>制作者：三原和馬、藥師寺芙美、秋山瑠星</p>
-          <p>BGM：？？？</p>
+          <p>BGM：レトロパーティー　甘茶の音楽工房</p>
         </div>
 
         <button
