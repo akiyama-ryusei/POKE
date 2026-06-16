@@ -60,6 +60,7 @@ const ITEMS = [
 
 const ENEMY_EFFECT_DURATION_MS = 1800;
 const MAX_PLAYER_TURNS = 15;
+const COUNTDOWN_WARNING_TURNS = 5;
 
 // ITEMS から重複なくランダムに n 個選ぶ
 function pickRandomItems(n) {
@@ -218,6 +219,10 @@ export default function MainGame({ level = 1 }) {
   const playerLose = isHandOut(hands.player.left) && isHandOut(hands.player.right);
   const enemyLose = isHandOut(hands.enemy.left) && isHandOut(hands.enemy.right);
   const sacrifiveUnavailable = isHandOut(hands.player.left) || isHandOut(hands.player.right);
+  const remainingTurns = Math.max(MAX_PLAYER_TURNS - turnCount, 0);
+  const showTurnCountdown = remainingTurns <= COUNTDOWN_WARNING_TURNS;
+  const playerFingerTotal = totalFingerCount(hands.player);
+  const enemyFingerTotal = totalFingerCount(hands.enemy);
 
   function recordGameResult(resultWinner, resultTurns) {
     saveGameResult({
@@ -870,9 +875,37 @@ function chooseEnemyGuardHand(currentHands) {
             </p>
             <p className="mt-2 min-h-8 text-2xl font-black">{message}</p>
             {!winner ? (
-              <p className="mt-2 text-sm font-bold text-white/60">
-                TURN {turnCount} / {MAX_PLAYER_TURNS}
-              </p>
+              <div className="mt-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <p
+                    className={[
+                      "text-sm font-black tracking-[0.12em]",
+                      showTurnCountdown ? "text-yellow-300" : "text-white/60",
+                    ].join(" ")}
+                  >
+                    TURN {turnCount} / {MAX_PLAYER_TURNS}
+                  </p>
+                  {showTurnCountdown ? (
+                    <p className="border-2 border-yellow-300 bg-yellow-300 px-3 py-1 text-sm font-black text-black">
+                      判定まであと {remainingTurns} ターン
+                    </p>
+                  ) : null}
+                </div>
+                <div className="mt-2 h-3 border border-white/25 bg-white/10">
+                  <div
+                    className={[
+                      "h-full transition-all",
+                      showTurnCountdown ? "bg-yellow-300" : "bg-cyan-300",
+                    ].join(" ")}
+                    style={{ width: `${(turnCount / MAX_PLAYER_TURNS) * 100}%` }}
+                  />
+                </div>
+                {showTurnCountdown ? (
+                  <p className="mt-2 text-sm font-bold text-white/75">
+                    指の合計: PLAYER {playerFingerTotal} / ENEMY {enemyFingerTotal}
+                  </p>
+                ) : null}
+              </div>
             ) : null}
             {turn === "player" && !winner ? (
               <p className="mt-2 text-sm text-white/70">
