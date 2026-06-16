@@ -80,6 +80,7 @@ export default function Home() {
           <p>・タッチされた相手の手は、タッチした自分の手の指の数だけ増えます。</p>
           <p>・指の数が5以上になった手はアウトになります。</p>
           <p>・両手がアウトになったプレイヤーの負けです。</p>
+          <p>・15ターン以内に勝負がつかない場合、指の合計が少ない方の判定勝ちです。</p>
           <button
             onClick={() => {
               playClickSound();
@@ -98,6 +99,7 @@ export default function Home() {
           <p>・The touched hand will increase by the number of fingers on the hand you used to touch it.</p>
           <p>・A hand with five or more fingers is out.</p>
           <p>・The player whose both hands are out loses.</p>
+          <p>・If the battle is not decided within 15 turns, the player with fewer total fingers wins by decision.</p>
           <button
             onClick={() => {
               playClickSound();

@@ -59,6 +59,7 @@ const ITEMS = [
 ];
 
 const ENEMY_EFFECT_DURATION_MS = 1800;
+const MAX_PLAYER_TURNS = 15;
 
 // ITEMS から重複なくランダムに n 個選ぶ
 function pickRandomItems(n) {
@@ -113,6 +114,10 @@ function nextFingerCount(currentCount, power) {
 // アイテムの効果で増やすときに役立ちそう
 function attackPower(hand) {
   return hand.count + hand.attackBonus;
+}
+
+function totalFingerCount(ownerHands) {
+  return ownerHands.left.count + ownerHands.right.count;
 }
 
 // 攻撃する関数
@@ -193,6 +198,7 @@ export default function MainGame({ level = 1 }) {
   const [turn, setTurn] = useState("player");
   const [message, setMessage] = useState("自分の手を選んでください");
   const [winner, setWinner] = useState(null);
+  const [resultReason, setResultReason] = useState("");
   const [turnCount, setTurnCount] = useState(0);
 
   // アイテム関連の状態
@@ -229,6 +235,27 @@ export default function MainGame({ level = 1 }) {
       });
   }
 
+  function finishGame(resultWinner, resultTurns, resultMessage, reason = "") {
+    recordGameResult(resultWinner, resultTurns);
+    setWinner(resultWinner);
+    setResultReason(reason);
+    setMessage(resultMessage);
+  }
+
+  function finishGameByTurnLimit(resultTurns, currentHands) {
+    const playerTotal = totalFingerCount(currentHands.player);
+    const enemyTotal = totalFingerCount(currentHands.enemy);
+    const resultWinner = playerTotal < enemyTotal ? "player" : "enemy";
+    const resultMessage = resultWinner === "player" ? "判定勝ち! YOU WIN!" : "判定負け。YOU LOSE...";
+
+    finishGame(
+      resultWinner,
+      resultTurns,
+      resultMessage,
+      `15ターン終了。指の合計: PLAYER ${playerTotal} / ENEMY ${enemyTotal}。少ない方の勝ちです。`
+    );
+  }
+
   function showEnemyEffect(effect) {
     if (enemyEffectTimerRef.current) {
       clearTimeout(enemyEffectTimerRef.current);
@@ -256,6 +283,7 @@ export default function MainGame({ level = 1 }) {
     setTurn("player");
     setMessage("自分の手を選んでください");
     setWinner(null);
+    setResultReason("");
     setTurnCount(0);
     // level2 以上ではゲーム開始時にランダムでアイテムを配布
     setPlayerItems(level >= 2 ? pickRandomItems(2) : []);
@@ -281,8 +309,15 @@ export default function MainGame({ level = 1 }) {
       showEnemyEffect("guard");
 
       setMessage("相手がGuardを発動。この攻撃を2本軽減しました");
-      setTurn("enemy");
+      setSelectedHand(null);
       setDoubleAttackActive(false);
+
+      if (nextTurnCount >= MAX_PLAYER_TURNS) {
+        finishGameByTurnLimit(nextTurnCount, hands);
+        return;
+      }
+
+      setTurn("enemy");
 
       setTimeout(() => enemyAttack(hands, nextTurnCount), 700);
 
@@ -310,9 +345,12 @@ export default function MainGame({ level = 1 }) {
     setSelectedHand(null);
 
     if (isHandOut(nextEnemyHands.left) && isHandOut(nextEnemyHands.right)) {
-      recordGameResult("player", nextTurnCount);
-      setWinner("player");
-      setMessage("YOU WIN!");
+      finishGame("player", nextTurnCount, "YOU WIN!");
+      return;
+    }
+
+    if (nextTurnCount >= MAX_PLAYER_TURNS) {
+      finishGameByTurnLimit(nextTurnCount, nextHands);
       return;
     }
 
@@ -439,7 +477,7 @@ function chooseEnemyMove(currentHands) {
       });
     });
 
-    if (twoStepAttackMoves.length > 0 && Math.random() < 0.9) {
+    if (twoStepAttackMoves.length > 0 && randomChance(0.9)) {
       return randomChoice(twoStepAttackMoves);
     }
   }
@@ -535,9 +573,7 @@ function chooseEnemyGuardHand(currentHands) {
     });
 
     if (isHandOut(nextPlayerHands.left) && isHandOut(nextPlayerHands.right)) {
-      recordGameResult("enemy", resultTurns);
-      setWinner("enemy");
-      setMessage("YOU LOSE...");
+      finishGame("enemy", resultTurns, "YOU LOSE...");
       return;
     }
 
@@ -833,6 +869,11 @@ function chooseEnemyGuardHand(currentHands) {
               {winner ? "RESULT" : turn === "player" ? "COMMAND" : "ENEMY TURN"}
             </p>
             <p className="mt-2 min-h-8 text-2xl font-black">{message}</p>
+            {!winner ? (
+              <p className="mt-2 text-sm font-bold text-white/60">
+                TURN {turnCount} / {MAX_PLAYER_TURNS}
+              </p>
+            ) : null}
             {turn === "player" && !winner ? (
               <p className="mt-2 text-sm text-white/70">
                 ▶ 自分の手を選ぶ → 相手の手を選んで POKE
@@ -842,7 +883,7 @@ function chooseEnemyGuardHand(currentHands) {
         </section>
       </div>
 
-      <ResultModal winner={winner} onRetry={resetGame} />
+      <ResultModal winner={winner} reason={resultReason} onRetry={resetGame} />
     </main>
   );
 }
