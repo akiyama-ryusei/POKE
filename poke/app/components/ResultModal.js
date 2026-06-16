@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 
-export default function ResultModal({ winner, onRetry }) {
+export default function ResultModal({ winner, reason, onRetry }) {
   if (!winner) return null;
 
   const playerWon = winner === "player";
@@ -19,6 +19,9 @@ export default function ResultModal({ winner, onRetry }) {
         <h2 id="result-title" className="mt-3 text-4xl font-black">
           {playerWon ? "YOU WIN!" : "YOU LOSE..."}
         </h2>
+        {reason ? (
+          <p className="mt-3 text-sm font-bold leading-6 text-white/75">{reason}</p>
+        ) : null}
 
         <div className="mt-6 grid gap-3">
           <button
